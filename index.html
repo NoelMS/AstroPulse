@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AstroPulse</title>
+  <link rel="icon" type="image/png" href="assets/astropulse-icon.png">
+  <script>try { if (localStorage.getItem('astropulse-theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}</script>
+  <script>try { if (!sessionStorage.getItem('astropulse-intro') && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) { document.documentElement.classList.add('intro-pending'); setTimeout(function () { document.documentElement.classList.remove('intro-pending'); }, 15000); } } catch (e) {}</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="astropulse.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+</head>
+<body>
+
+<div class="intro" id="intro" hidden aria-hidden="true">
+  <p class="intro__name">AstroPulse</p>
+  <p class="intro__line">Fit it, then trust it.</p>
+</div>
+
+<div id="app-container" data-view="sandbox-view">
+  <header id="astropulse-hud" class="app-header">
+    <p class="wordmark"><span class="mark" id="brand-mark" aria-hidden="true"><span class="mark__ring"></span></span><span class="wordmark__text"><span class="wordmark__name">Astro<span>Pulse</span></span><span class="wordmark__tag">X-ray binary lab</span></span></p>
+
+    <nav class="view-tabs" id="hud-nav" aria-label="Views">
+      <button class="nav-btn active" data-view="sandbox-view" aria-current="page">Sandbox</button>
+      <button class="nav-btn" data-view="spectral-view">Spectral fit</button>
+      <button class="nav-btn" data-view="pipelines-view">Reduction</button>
+      <button class="nav-btn" data-view="timing-view">Timing</button>
+      <button class="nav-btn" data-view="live-view">Live</button>
+      <button class="nav-btn" data-view="dashboard-view">Archive</button>
+    </nav>
+
+    <div class="header-tools">
+      <span class="status" id="scene-status" data-state="busy"><span class="status__dot" aria-hidden="true"></span><span class="status__text">Loading scene</span></span>
+      <button class="btn--text" id="btn-theme" aria-pressed="false">Light theme</button>
+    </div>
+  </header>
+
+  <aside class="source-list" aria-label="Sources">
+    <div class="panel-bar">
+      <span class="eyebrow panel-bar__title">Sources</span>
+      <button class="panel-toggle" id="btn-collapse-list" aria-controls="target-pills-container" aria-expanded="true" aria-label="Hide sources"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3 L5 8 L10 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="target-pills-scroll" id="target-pills-container"></div>
+    <figure class="sky-panel">
+      <svg id="sky-map" class="sky-map" viewBox="0 0 184 100" role="img" aria-label="Source positions in galactic coordinates"></svg>
+      <figcaption class="sky-panel__cap meta" id="sky-map-caption"></figcaption>
+      <p class="eyebrow sky-panel__label">Sky, galactic coordinates</p>
+    </figure>
+  </aside>
+
+  <main id="stage">
+    <div class="stage-toolbar" id="sandbox-top-hud">
+      <div class="toolbar-group">
+        <span class="eyebrow" id="cam-label">Camera</span>
+        <div class="segmented" id="camera-mode-pills-bar" role="group" aria-labelledby="cam-label">
+          <button class="cam-pill active" data-cam="system">System</button>
+          <button class="cam-pill" data-cam="isco">ISCO</button>
+          <button class="cam-pill" data-cam="galactic">Galaxy</button>
+          <button class="cam-pill" data-cam="free">Free</button>
+        </div>
+      </div>
+      <div class="toolbar-group">
+        <span class="eyebrow" id="model-label">Model</span>
+        <div class="segmented" id="model-mode-pills" role="group" aria-labelledby="model-label">
+          <button class="model-pill active" data-model="theory" title="Relativistic model of the system">Relativistic</button>
+          <button class="model-pill" data-model="real-surface" title="Surface built from telescope photon counts">Flux surface</button>
+          <button class="model-pill" data-model="real-video" title="General relativistic MHD simulation">GRMHD</button>
+        </div>
+      </div>
+      <div class="toolbar-group toolbar-group--end">
+        <button class="btn--text freeze-btn" id="btn-toggle-sim-freeze" title="Pause the scene for inspection"><span id="lbl-sim-freeze">Freeze</span></button>
+        <button class="btn--text" id="btn-camera-reset">Reset view</button>
+        <button class="btn--text" id="btn-audio-toggle" aria-pressed="true">Sound</button>
+      </div>
+    </div>
+
+    <div id="three-viewport-container">
+      <div id="three-canvas-wrapper"></div>
+
+      <div id="real-observatory-wrapper" class="real-observatory-wrapper hidden">
+        <canvas id="real-obs-canvas"></canvas>
+        <div id="obs-split-divider" class="obs-split-divider hidden">
+          <div class="obs-split-line"></div>
+          <div class="obs-split-handle" id="obs-split-handle" aria-hidden="true">&lt;&gt;</div>
+        </div>
+        <div class="real-obs-floating-toolbar" id="real-obs-toolbar">
+          <div class="segmented">
+            <button class="obs-tool-btn active" data-band="composite">Composite</button>
+            <button class="obs-tool-btn" data-band="xray">X-ray</button>
+            <button class="obs-tool-btn" data-band="ir">Infrared</button>
+            <button class="obs-tool-btn" data-band="optical">Optical</button>
+          </div>
+          <button class="obs-tool-btn" id="btn-split-toggle">Split compare</button>
+          <button class="obs-tool-btn" id="btn-contours-toggle">Contours: OFF</button>
+          <button class="obs-tool-btn" id="btn-profile-toggle">Radial profile</button>
+          <div class="segmented">
+            <button class="obs-stretch-pill active" data-stretch="linear">Linear</button>
+            <button class="obs-stretch-pill" data-stretch="log">Log</button>
+            <button class="obs-stretch-pill" data-stretch="asinh">Asinh</button>
+            <button class="obs-stretch-pill" data-stretch="sqrt">Sqrt</button>
+          </div>
+          <div class="segmented">
+            <button class="obs-lut-pill active" data-lut="chandra">Chandra</button>
+            <button class="obs-lut-pill" data-lut="heat">Heat</button>
+            <button class="obs-lut-pill" data-lut="optical">Optical</button>
+            <button class="obs-lut-pill" data-lut="plasma">Plasma</button>
+            <button class="obs-lut-pill" data-lut="viridis">Viridis</button>
+            <button class="obs-lut-pill" data-lut="mono">Mono</button>
+          </div>
+          <div class="segmented">
+            <button class="obs-tool-btn" id="btn-obs-zoom-in" aria-label="Zoom in">+</button>
+            <button class="obs-tool-btn" id="btn-obs-zoom-out" aria-label="Zoom out">-</button>
+            <button class="obs-tool-btn" id="btn-obs-zoom-reset" aria-label="Reset zoom">1:1</button>
+          </div>
+        </div>
+        <div class="real-obs-probe-hud" id="real-obs-probe-hud">
+          <h3 class="eyebrow">Pixel probe</h3>
+          <dl class="facts">
+            <dt>RA</dt><dd class="num" id="probe-ra">--</dd>
+            <dt>Dec</dt><dd class="num" id="probe-dec">--</dd>
+            <dt>Flux</dt><dd class="num" id="probe-flux">--</dd>
+            <dt>SNR</dt><dd class="num" id="probe-snr">--</dd>
+          </dl>
+        </div>
+        <div class="real-obs-profile-drawer hidden" id="real-obs-profile-drawer">
+          <div class="section__head">
+            <h3 class="eyebrow">Radial surface brightness</h3>
+            <button class="btn--text" id="btn-close-profile-drawer">Close</button>
+          </div>
+          <svg id="svg-radial-profile" viewBox="0 0 340 180" class="profile-chart"></svg>
+          <dl class="facts">
+            <dt>Core FWHM</dt><dd id="prof-fwhm">0.48 arcsec</dd>
+            <dt>PSF quality</dt><dd id="prof-psf">Diffraction limited</dd>
+            <dt>King radius</dt><dd id="prof-rking">1.82 arcsec</dd>
+          </dl>
+        </div>
+      </div>
+
+      <p class="stage-caption" id="stage-caption" aria-live="polite"></p>
+      <div class="perf-notice" id="perf-notice" role="status" hidden>
+        <p class="perf-notice__title" id="perf-title"></p>
+        <p class="meta" id="perf-text"></p>
+        <div class="btn-row" id="perf-actions"></div>
+      </div>
+
+      <div id="nasa-video-viewport" class="nasa-video-viewport hidden">
+        <canvas id="grmhd-sim-canvas"></canvas>
+        <video id="nasa-sim-video" loop playsinline muted hidden></video>
+        <div class="nasa-video-telemetry" id="nasa-video-telemetry">
+          <div class="section__head">
+            <h3 class="eyebrow" id="grmhd-telem-title">GRMHD simulation</h3>
+            <button class="btn--text" id="btn-close-nasa-telem">Hide</button>
+          </div>
+          <dl class="facts">
+            <dt>Metric</dt><dd id="grmhd-val-metric">Kerr spacetime</dd>
+            <dt id="grmhd-lbl-param1">Spin a*</dt><dd class="num" id="grmhd-val-param1">0.998 c</dd>
+            <dt id="grmhd-lbl-param2">ISCO radius</dt><dd class="num" id="grmhd-val-param2">1.24 R_g</dd>
+            <dt id="grmhd-lbl-param3">Lense-Thirring</dt><dd class="num" id="grmhd-val-param3">142.8 Hz</dd>
+          </dl>
+          <div class="btn-row">
+            <button class="btn--secondary btn--small" id="btn-nasa-play-pause">Pause</button>
+            <button class="btn--secondary btn--small" id="btn-nasa-speed">1.0x Speed</button>
+            <button class="btn--secondary btn--small" id="btn-nasa-fullscreen">Fullscreen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section class="workstation-view hidden" id="spectral-view" aria-labelledby="spectral-title">
+      <div class="workstation-inner">
+        <header class="view__head">
+          <p class="eyebrow">Spectral fit</p>
+          <h2 class="title" id="spectral-title">Continuum and line model</h2>
+          <p class="lead">A synthetic observation of the selected source from 0.5 to 60 keV. Move a parameter and the model, residuals and chi-square update; run the fit to minimise it.</p>
+          <div class="btn-row">
+            <button class="btn--primary" id="btn-fit-xspec-quick">Run chi-square fit <span class="arrow" aria-hidden="true">&gt;</span></button>
+            <button class="btn--secondary" id="btn-spec-reseed">New observation</button>
+            <button class="btn--secondary" id="btn-apply-to-3d">Apply to 3D model</button>
+          </div>
+        </header>
+
+        <div class="result__statement reveal-target">
+          <p class="verdict verdict--verified" id="fit-verdict">Acceptable fit</p>
+          <p class="result__line"><span class="result__number num" id="stat-chisq">1.042</span> <span class="meta">reduced chi-square, <span id="stat-dof">84 degrees of freedom, p = 0.41</span></span></p>
+          <p class="meta result__log" id="fit-log" aria-live="polite"></p>
+        </div>
+
+        <div class="spectral-grid-layout">
+          <figure class="figure-panel reveal-target">
+            <div class="chart-legend-row" aria-label="Legend">
+              <span class="leg-item"><span class="leg-swatch leg-data"></span>Observed counts</span>
+              <span class="leg-item"><span class="leg-swatch leg-model"></span>Total model</span>
+              <span class="leg-item"><span class="leg-swatch leg-disk"></span>Thermal disk</span>
+              <span class="leg-item"><span class="leg-swatch leg-po"></span>Power law</span>
+            </div>
+            <svg id="spectrum-chart-svg" viewBox="0 0 760 340" role="img" aria-label="Unfolded energy spectrum"></svg>
+            <svg id="residuals-chart-svg" viewBox="0 0 760 90" role="img" aria-label="Fit residuals"></svg>
+            <figcaption class="meta"><strong>Figure 1.</strong> Unfolded spectrum, E<sup>2</sup>F(E), with model components, and residuals in units of sigma. The counts are synthetic: Poisson draws from the catalogued parameters through a model response, fixed until you ask for a new observation. Only bins with at least 10 counts enter the fit.</figcaption>
+          </figure>
+
+          <div class="parameter-panel reveal-target">
+            <div class="section__head"><h3 class="section-title">Parameters</h3></div>
+            <ul class="model-pills-row">
+              <li class="model-chip active">tbabs</li>
+              <li class="model-chip active">diskbb</li>
+              <li class="model-chip active">powerlaw</li>
+              <li class="model-chip active">diskline</li>
+              <li class="model-chip" id="chip-cyclabs">cyclabs</li>
+            </ul>
+            <div class="sliders-stack">
+              <div class="param-slider-group">
+                <label class="param-header-line" for="rng-tin"><span class="p-name">Inner disk temperature, kT<sub>in</sub></span><span class="p-val num" id="val-tin">0.45 keV</span></label>
+                <input type="range" id="rng-tin" min="0.2" max="2.5" step="0.01" value="0.45" class="hud-slider">
+                <span class="p-desc meta">Multi-temperature blackbody from the innermost stable orbit.</span>
+              </div>
+              <div class="param-slider-group">
+                <label class="param-header-line" for="rng-mdot"><span class="p-name">Accretion rate, Mdot</span><span class="p-val num" id="val-mdot">0.012 L_Edd</span></label>
+                <input type="range" id="rng-mdot" min="0.005" max="1.0" step="0.005" value="0.012" class="hud-slider">
+                <span class="p-desc meta">Mass transfer from the companion into the disk.</span>
+              </div>
+              <div class="param-slider-group">
+                <label class="param-header-line" for="rng-gamma"><span class="p-name">Photon index, &Gamma;</span><span class="p-val num" id="val-gamma">1.74</span></label>
+                <input type="range" id="rng-gamma" min="0.5" max="3.0" step="0.01" value="1.74" class="hud-slider">
+                <span class="p-desc meta">Slope of the Comptonized continuum from the corona.</span>
+              </div>
+              <div class="param-slider-group">
+                <label class="param-header-line" for="rng-fe"><span class="p-name">Fe K&alpha; centroid</span><span class="p-val num" id="val-fe">6.41 keV</span></label>
+                <input type="range" id="rng-fe" min="6.4" max="6.97" step="0.01" value="6.41" class="hud-slider">
+                <span class="p-desc meta">Fluorescent line shifted by gravity and orbital motion.</span>
+              </div>
+              <div class="param-slider-group" id="group-bfield">
+                <label class="param-header-line" for="rng-bfield"><span class="p-name">Surface magnetic field, B</span><span class="p-val num" id="val-bfield">3.2 x 10^12 G</span></label>
+                <input type="range" id="rng-bfield" min="1" max="50" step="0.5" value="32" class="hud-slider">
+                <span class="p-desc meta" id="bfield-desc">Dipole strength from cyclotron resonance features.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section class="section reveal-target">
+          <div class="section__head"><h3 class="section-title">Derived quantities</h3><span class="meta">Computed from the current parameters</span></div>
+          <div class="compare derived-physics-grid">
+            <div class="physics-stat-card">
+              <span class="eyebrow">Inner disk temperature</span>
+              <div class="compare__value" id="stat-temp-k">5.22 &times; 10^6 K</div>
+              <span class="meta" id="stat-temp-kev">0.45 keV</span>
+            </div>
+            <div class="physics-stat-card">
+              <span class="eyebrow">Mass accretion rate</span>
+              <div class="compare__value" id="stat-mdot-yr">3.40 &times; 10^-9 M&#9737;/yr</div>
+              <span class="meta" id="stat-mdot-sec">2.15 &times; 10^17 g/s</span>
+            </div>
+            <div class="physics-stat-card">
+              <span class="eyebrow">Spectral state</span>
+              <div class="compare__value" id="stat-instab-state">Low / hard</div>
+              <span class="meta" id="stat-instab-desc">Truncated inner disk, jet active</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section reveal-target" aria-labelledby="optical-title">
+          <div class="section__head"><h3 class="section-title" id="optical-title">Optical emission lines</h3><span class="meta" id="optical-line-name">H&alpha; 6563</span></div>
+          <p class="lead optical-lead">How the line from the disk, the irradiated face of the companion and the stream impact spot moves over one orbit. Velocities follow from the catalogued masses and period; the inclination is yours to set.</p>
+          <p class="meta" id="optical-empty" hidden>This source has no binary companion, so there is no orbital line variability to model.</p>
+          <div id="optical-body">
+            <div class="optical-controls">
+              <div class="param-slider-group">
+                <label class="param-header-line" for="rng-incl"><span class="p-name">Inclination, i</span><span class="p-val num" id="val-incl">60 deg</span></label>
+                <input type="range" id="rng-incl" min="15" max="85" step="1" value="60" class="hud-slider">
+              </div>
+              <div class="param-slider-group">
+                <label class="param-header-line" for="rng-phase"><span class="p-name">Orbital phase</span><span class="p-val num" id="val-phase">0.25</span></label>
+                <input type="range" id="rng-phase" min="0" max="1" step="0.01" value="0.25" class="hud-slider">
+              </div>
+            </div>
+            <div class="optical-grid">
+              <figure class="figure-panel">
+                <div class="trailed">
+                  <canvas id="trailed-canvas" class="trailed__canvas" role="img" aria-label="Trailed spectrogram over two orbital cycles"></canvas>
+                  <span class="trailed__marker" id="trailed-phase-marker" aria-hidden="true"></span>
+                </div>
+                <div class="trailed__axis meta num" id="trailed-axis"></div>
+                <figcaption class="meta"><strong>Figure 2.</strong> Trailed spectrogram over two orbits, phase increasing upward. The broad double-peaked band is the disk; the narrow S-waves are the companion and the impact spot. The line marks the selected phase.</figcaption>
+              </figure>
+              <figure class="figure-panel">
+                <svg id="profile-chart-svg" viewBox="0 0 540 260" role="img" aria-label="Line profile at the selected phase"></svg>
+                <figcaption class="meta"><strong>Figure 3.</strong> Line profile at the selected phase: total in solid, disk component dashed, companion component dotted.</figcaption>
+              </figure>
+            </div>
+            <div class="compare optical-compare">
+              <div><span class="eyebrow">Companion, K<sub>2</sub></span><div class="compare__value" id="opt-k2">--</div></div>
+              <div><span class="eyebrow">Compact object, K<sub>1</sub></span><div class="compare__value" id="opt-k1">--</div></div>
+              <div><span class="eyebrow">Separation, a</span><div class="compare__value" id="opt-a">--</div></div>
+              <div><span class="eyebrow">Outer disk velocity</span><div class="compare__value" id="opt-vout">--</div></div>
+              <div><span class="eyebrow">Mass function, f(M)</span><div class="compare__value" id="opt-fm">--</div></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="workstation-view hidden" id="pipelines-view" aria-labelledby="pipelines-title">
+      <div class="workstation-inner">
+        <header class="view__head">
+          <p class="eyebrow">Reduction</p>
+          <h2 class="title" id="pipelines-title">From raw frames to a calibrated spectrum</h2>
+          <p class="lead">An ESO Reflex workflow, the XSPEC command line, and IRAF aperture extraction for the selected source.</p>
+        </header>
+
+        <div class="tabs" id="pipeline-subtabs" role="tablist">
+          <button class="pipe-subtab active" data-subtab="subtab-reflex" role="tab">Reflex workflow</button>
+          <button class="pipe-subtab" data-subtab="subtab-xspec" role="tab">XSPEC</button>
+          <button class="pipe-subtab" data-subtab="subtab-pyraf" role="tab">IRAF extraction</button>
+        </div>
+
+        <div class="pipeline-content-area" id="pipeline-tab-content">
+          <div class="subtab-pane active" id="subtab-reflex">
+            <div class="section__head">
+              <h3 class="section-title">Spectroscopic workflow</h3>
+              <button class="btn--primary" id="btn-execute-reflex">Run workflow <span class="arrow" aria-hidden="true">&gt;</span></button>
+            </div>
+            <div class="reflex-canvas-viewport" id="reflex-canvas">
+              <svg id="reflex-wires-svg" class="reflex-wires" aria-hidden="true"></svg>
+              <div class="reflex-node-container" id="reflex-nodes-box"></div>
+            </div>
+            <p class="reflex-console-footer" id="reflex-log-bar" aria-live="polite">
+              <span class="log-indicator verdict">Ready</span>
+              <span class="log-msg" id="reflex-status-text">Bias, flat, dispersion solution and flux standard are linked. Select a step to inspect it.</span>
+            </p>
+          </div>
+
+          <div class="subtab-pane hidden" id="subtab-xspec">
+            <div class="tech xspec-terminal-card">
+              <div class="tech__head">
+                <span class="eyebrow">XSPEC 12.13.0c</span>
+                <span class="eyebrow">Try: data 1:1, model, fit, error 1, clear</span>
+              </div>
+              <div class="xspec-output-scroll" id="xspec-output" aria-live="polite"></div>
+              <div class="xspec-input-bar">
+                <label class="xspec-prompt" for="xspec-input">XSPEC12&gt;</label>
+                <input type="text" id="xspec-input" class="xspec-cli-input" autocomplete="off" spellcheck="false" placeholder="fit">
+                <button class="btn--tech" id="btn-xspec-submit">Send</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="subtab-pane hidden" id="subtab-pyraf">
+            <div class="section__head">
+              <h3 class="section-title">Optical aperture extraction</h3>
+              <button class="btn--secondary" id="btn-pyraf-splot">Run splot line fit</button>
+            </div>
+            <div class="pyraf-body-grid">
+              <figure class="figure-panel">
+                <svg id="pyraf-chart-svg" viewBox="0 0 680 260" role="img" aria-label="Extracted optical spectrum"></svg>
+                <figcaption class="meta"><strong>Figure 4.</strong> Continuum-normalized extraction showing He II 4686 and H&alpha; 6563 absorption. Model-generated.</figcaption>
+              </figure>
+              <div class="pyraf-measurements-box">
+                <p class="eyebrow">Aperture diagnostics</p>
+                <dl class="facts">
+                  <dt>Aperture radius</dt><dd class="num" id="pyraf-aperture">3.5 arcsec</dd>
+                  <dt>H&alpha; EW</dt><dd class="num" id="pyraf-halpha-ew">-4.8 &Aring;</dd>
+                  <dt>He II 4686 EW</dt><dd class="num" id="pyraf-he2-ew">-2.1 &Aring;</dd>
+                  <dt>Radial velocity</dt><dd class="num" id="pyraf-vrad">+64.2 km/s</dd>
+                  <dt>Sky sigma</dt><dd class="num">1.12 counts/px</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workstation-view hidden" id="timing-view" aria-labelledby="timing-title">
+      <div class="workstation-inner">
+        <header class="view__head">
+          <p class="eyebrow">Timing &middot; <span class="num" id="timing-resolution-badge">--</span></p>
+          <h2 class="title" id="timing-title">Periods, noise and state tracks</h2>
+          <p class="lead" id="timing-lead">Synthetic light curves built from the catalogued periods, red noise and counting noise, then analysed the way real data would be. Each result is checked against what was injected.</p>
+          <div class="btn-row">
+            <div class="segmented" id="timing-source" role="group" aria-label="Data source">
+              <button class="active" data-source="synthetic" aria-pressed="true">Synthetic</button>
+              <button data-source="live" aria-pressed="false">Live, Swift/BAT</button>
+            </div>
+            <button class="btn--secondary" id="btn-timing-reseed">New realisation</button>
+          </div>
+        </header>
+
+        <div class="result__statement reveal-target">
+          <p class="verdict" id="timing-verdict">Period recovered</p>
+          <p class="result__line"><span class="result__number num" id="timing-headline-value">--</span> <span class="meta" id="timing-headline-meta"></span></p>
+        </div>
+
+        <div class="compare timing-results reveal-target">
+          <div>
+            <span class="eyebrow">Orbital period, Lomb-Scargle</span>
+            <div class="compare__value" id="res-orb-value">--</div>
+            <span class="marker marker--neutral" id="res-orb-mark">--</span>
+            <span class="meta" id="res-orb-note"></span>
+          </div>
+          <div>
+            <span class="eyebrow">Coherent signal, Fourier</span>
+            <div class="compare__value" id="res-fourier-value">--</div>
+            <span class="marker marker--neutral" id="res-fourier-mark">--</span>
+            <span class="meta" id="res-fourier-note"></span>
+          </div>
+          <div>
+            <span class="eyebrow">Variability timescale, Gaussian process</span>
+            <div class="compare__value" id="res-drw-value">--</div>
+            <span class="marker marker--neutral" id="res-drw-mark">--</span>
+            <span class="meta" id="res-drw-note"></span>
+          </div>
+        </div>
+
+        <figure class="figure-panel timing-lc reveal-target">
+          <svg id="lc-chart-svg" viewBox="0 0 1080 220" role="img" aria-label="Unevenly sampled monitoring light curve"></svg>
+          <figcaption class="meta" id="lc-caption"><strong>Figure 5.</strong> Monitoring light curve: unevenly sampled with observing gaps, the reason a Lomb-Scargle periodogram is used rather than an FFT. Orbital modulation, damped-random-walk red noise and measurement noise are injected.</figcaption>
+        </figure>
+
+        <div class="timing-grid-layout">
+          <figure class="figure-panel reveal-target">
+            <svg id="lomb-chart-svg" viewBox="0 0 540 260" role="img" aria-label="Lomb-Scargle periodogram"></svg>
+            <figcaption class="meta" id="ls-caption"><strong>Figure 6.</strong> Lomb-Scargle periodogram of Figure 5. The dashed line is the 0.1% false-alarm level for this frequency grid, which assumes white noise; red noise can still raise peaks at long periods.</figcaption>
+          </figure>
+          <figure class="figure-panel reveal-target">
+            <svg id="pds-chart-svg" viewBox="0 0 540 260" role="img" aria-label="Power density spectrum"></svg>
+            <figcaption class="meta" id="pds-caption"><strong>Figure 7.</strong> Leahy-normalised power spectrum of an evenly binned X-ray light curve, averaged over 16 segments and rebinned logarithmically. A peak counts as detected above 6 sigma over the local continuum.</figcaption>
+          </figure>
+          <figure class="figure-panel reveal-target">
+            <svg id="folded-chart-svg" viewBox="0 0 540 260" role="img" aria-label="Folded profile"></svg>
+            <figcaption class="meta" id="folded-caption"><strong>Figure 8.</strong> Folded profile.</figcaption>
+          </figure>
+          <figure class="figure-panel reveal-target">
+            <svg id="hid-chart-svg" viewBox="0 0 540 260" role="img" aria-label="Hardness-intensity diagram"></svg>
+            <figcaption class="meta"><strong>Figure 9.</strong> Hardness-intensity track computed by integrating the spectral model through an outburst sequence. The circle is the current spectral fit.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="workstation-view hidden" id="live-view" aria-labelledby="live-title">
+      <div class="workstation-inner">
+        <header class="view__head">
+          <p class="eyebrow live-status"><span class="live-pulse" id="live-pulse" aria-hidden="true"></span>Live &middot; <span id="live-feed-status">Not loaded</span> &middot; <span id="live-checked"></span> &middot; <span class="num" id="live-clock"></span></p>
+          <h2 class="title" id="live-title">What the sources are doing now</h2>
+          <p class="lead">Hard X-ray flux from the Swift/BAT monitor, where the source sits over ESO&rsquo;s Paranal Observatory at this moment, and how the 3D model follows along. Everything here updates by itself.</p>
+        </header>
+        <p class="live-error" id="live-error" role="status" hidden></p>
+
+        <section class="live-focus" id="live-focus" aria-labelledby="lf-name">
+          <div class="live-focus__main">
+            <p class="eyebrow" id="lf-class"></p>
+            <h3 class="live-focus__name" id="lf-name"></h3>
+            <p class="live-focus__flux"><span class="result__number num" id="lf-flux">--</span> <span class="live-focus__unit">mCrab</span> <span class="marker" id="lf-trend"></span></p>
+            <p class="meta" id="lf-flux-note"></p>
+            <figure class="figure-panel live-focus__chart">
+              <svg id="lf-chart" viewBox="0 0 720 210" role="img" aria-label="Swift/BAT light curve over the last year"></svg>
+            </figure>
+            <div class="live-focus__row">
+              <p class="meta num" id="lf-age"></p>
+              <div class="btn-row">
+                <button class="btn--text" id="btn-lf-replay">Replay the last year</button>
+                <button class="btn--text" id="btn-lf-timing">Analyse in Timing <span class="arrow" aria-hidden="true">&gt;</span></button>
+              </div>
+            </div>
+          </div>
+          <div class="live-focus__side">
+            <div class="lf-block">
+              <p class="eyebrow">Sky over Paranal now</p>
+              <p class="lf-big num" id="lf-alt">--</p>
+              <p class="meta" id="lf-alt-note"></p>
+              <svg id="lf-sky" class="lf-sky" viewBox="0 0 360 170" role="img" aria-label="Altitude over the next day from Paranal"></svg>
+              <p class="meta" id="lf-window"></p>
+            </div>
+            <div class="lf-block">
+              <p class="eyebrow">In the simulation</p>
+              <p class="meta lf-sim" id="lf-sim"></p>
+              <button class="btn--secondary" id="btn-lf-open">Open in Sandbox <span class="arrow" aria-hidden="true">&gt;</span></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="section live-monitor">
+          <div class="section__head"><h3 class="section-title">All sources</h3><span class="meta" id="live-updated"></span></div>
+          <div class="table-scroll">
+            <table class="live-table">
+              <thead>
+                <tr>
+                  <th scope="col">Source</th>
+                  <th scope="col">Last 12 months <span class="th-note">gaps dotted</span></th>
+                  <th scope="col" class="num">Latest day</th>
+                  <th scope="col" class="num">Last 7 days</th>
+                  <th scope="col" class="num">Previous year</th>
+                  <th scope="col">Trend</th>
+                  <th scope="col" class="num">Paranal</th>
+                </tr>
+              </thead>
+              <tbody id="live-rows"></tbody>
+            </table>
+          </div>
+          <p class="meta live-note">Fluxes in mCrab, 15-50 keV, calibrated on the Crab&rsquo;s own BAT rate. Trend compares the last 7 days with the scatter of weekly means over the previous year and needs 3 sigma to read Brightening or Fading. Paranal is the altitude above the horizon right now. Select a source to bring it into focus.</p>
+        </section>
+
+        <section class="section">
+          <div class="section__head"><h3 class="section-title">Latest reports</h3><span class="meta">The Astronomer&rsquo;s Telegram</span></div>
+          <ol class="live-alerts" id="live-alerts"></ol>
+        </section>
+      </div>
+    </section>
+
+    <section class="workstation-view hidden" id="dashboard-view" aria-labelledby="archive-title">
+      <div class="workstation-inner archive-inner">
+        <header class="archive-head">
+          <h2 class="archive-head__title" id="archive-title"><span class="eyebrow">Archive</span> Records from earlier analysis runs</h2>
+          <button class="btn--text" id="btn-return-to-sandbox">Back to sandbox</button>
+        </header>
+        <div class="dashboard-iframe-container">
+          <iframe id="classic-dashboard-frame" src="archive/index.html" title="Archive console"></iframe>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="inspector" id="sandbox-overlay" aria-label="Selected source">
+    <div class="panel-bar panel-bar--right">
+      <button class="panel-toggle" id="btn-collapse-inspector" aria-controls="sandbox-target-card" aria-expanded="true" aria-label="Hide details"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3 L5 8 L10 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="eyebrow panel-bar__title">Details</span>
+    </div>
+    <section class="sandbox-target-card" id="sandbox-target-card">
+      <p class="eyebrow" id="hud-target-type">High-mass X-ray binary</p>
+      <h2 class="target-name" id="hud-target-name">Cygnus X-1</h2>
+      <p class="marker marker--neutral" id="hud-target-state">Hard</p>
+      <p class="target-desc" id="hud-target-desc">Stellar-mass black hole accreting from a blue supergiant companion.</p>
+      <dl class="facts target-telemetry-grid">
+        <dt>Distance</dt><dd class="num" id="hud-target-dist">2.22 kpc</dd>
+        <dt>Compact mass</dt><dd class="num" id="hud-target-mass">21.2 M&#9737;</dd>
+        <dt>Accretion</dt><dd id="hud-target-mode">Focused wind</dd>
+        <dt>Eddington ratio</dt><dd class="num" id="hud-target-edd">0.012</dd>
+      </dl>
+
+      <div class="target-media-preview-box">
+        <div class="media-thumb-wrap" id="hud-media-thumb-wrap" role="button" tabindex="0" aria-label="Open the observatory image">
+          <img id="hud-media-thumb" class="media-thumb-img" src="assets/cygx1_chandra.jpg" alt="">
+        </div>
+        <p class="meta media-caption"><span id="hud-media-type-tag">Chandra X-ray</span>, <span class="num" id="hud-media-res-tag">5100 px</span></p>
+        <div class="btn-row">
+          <button class="btn--text" id="btn-view-real-image">Image <span class="arrow" aria-hidden="true">&gt;</span></button>
+          <button class="btn--text" id="btn-play-real-video">Video <span class="arrow" aria-hidden="true">&gt;</span></button>
+        </div>
+      </div>
+
+      <button class="btn--primary btn--block" id="btn-open-spectral-lab">Fit this spectrum <span class="arrow" aria-hidden="true">&gt;</span></button>
+      <p class="meta live-line" id="live-line" hidden></p>
+      <p class="meta scene-note" id="scene-note"></p>
+    </section>
+
+    <details class="sandbox-controls-drawer" id="sandbox-controls-drawer">
+      <summary class="drawer-summary">Scene options</summary>
+      <div class="opt">
+        <div class="opt__head"><span id="res-label">Ray-trace quality</span><span class="num" id="fps-readout"></span></div>
+        <div class="segmented segmented-fill" id="res-selector-pills" role="group" aria-labelledby="res-label">
+          <button class="res-pill" data-res="1024">Standard</button>
+          <button class="res-pill active" data-res="2048">High</button>
+        </div>
+      </div>
+      <div id="drawer-real-surface-controls" class="opt real-surface-controls-box hidden">
+        <div class="opt__head"><span id="cmap-label">Colour map</span></div>
+        <div class="segmented segmented-fill" id="colormap-selector-pills" role="group" aria-labelledby="cmap-label">
+          <button class="cmap-pill active" data-cmap="heat">Heat</button>
+          <button class="cmap-pill" data-cmap="chandra">Chandra</button>
+          <button class="cmap-pill" data-cmap="optical">Optical</button>
+          <button class="cmap-pill" data-cmap="viridis">Viridis</button>
+          <button class="cmap-pill" data-cmap="wire">Wire</button>
+        </div>
+        <label class="opt__head opt__head--sub" for="rng-flux-gain"><span>Flux gain</span><span id="val-flux-gain" class="num">12x</span></label>
+        <input type="range" id="rng-flux-gain" min="2" max="28" value="12" class="hud-slider">
+      </div>
+      <fieldset class="opt">
+        <legend class="opt__head">Show</legend>
+        <div class="toggle-list">
+          <label class="sim-toggle-label"><input type="checkbox" id="chk-sim-jets" checked><span>Jets</span></label>
+          <label class="sim-toggle-label"><input type="checkbox" id="chk-sim-doppler" checked><span>Doppler beaming</span></label>
+          <label class="sim-toggle-label"><input type="checkbox" id="chk-sim-stream" checked><span>Gas stream</span></label>
+          <label class="sim-toggle-label"><input type="checkbox" id="chk-sim-magfield" checked><span>Field lines</span></label>
+          <label class="sim-toggle-label"><input type="checkbox" id="chk-sim-live" checked><span>Follow live flux</span></label>
+        </div>
+      </fieldset>
+      <div class="opt">
+        <label class="opt__head" for="rng-sim-speed"><span>Animation speed</span><span class="num" id="val-sim-speed">1.0x</span></label>
+        <input type="range" id="rng-sim-speed" min="0" max="30" value="10" class="hud-slider">
+      </div>
+    </details>
+  </aside>
+</div>
+
+<div id="media-lightbox-modal" class="media-modal-backdrop hidden">
+  <div class="media-modal-window" role="dialog" aria-modal="true" aria-labelledby="modal-target-title">
+    <div class="media-modal-header">
+      <div class="media-modal-titles">
+        <p class="eyebrow" id="modal-target-badge">Observatory archive</p>
+        <h3 class="section-title" id="modal-target-title">Cygnus X-1</h3>
+      </div>
+      <div class="segmented" id="modal-tab-pills">
+        <button class="media-tab-pill active" data-tab="tab-image">Image</button>
+        <button class="media-tab-pill" data-tab="tab-video">Video</button>
+      </div>
+      <button class="btn--text" id="btn-close-media-modal">Close <span class="kbd">Esc</span></button>
+    </div>
+
+    <div class="media-modal-body">
+      <div class="media-pane active" id="pane-modal-image">
+        <div class="media-viewport-box">
+          <img id="modal-full-image" class="modal-main-img" src="assets/cygx1_chandra.jpg" alt="Observatory image of the selected source">
+        </div>
+        <div class="media-sidebar-meta">
+          <dl class="facts">
+            <dt>Facility</dt><dd id="modal-img-facility">Chandra ACIS-S and Palomar Observatory</dd>
+            <dt>Band</dt><dd id="modal-img-band">0.5 to 10 keV, X-ray</dd>
+            <dt>Resolution</dt><dd class="num" id="modal-img-resolution">5100 x 2127 px</dd>
+          </dl>
+          <p class="meta" id="modal-img-desc">Multi-wavelength composite of the system.</p>
+          <a id="btn-download-image" class="btn--primary" href="assets/cygx1_chandra.jpg" target="_blank" download>Open full resolution <span class="arrow" aria-hidden="true">&gt;</span></a>
+        </div>
+      </div>
+
+      <div class="media-pane hidden" id="pane-modal-video">
+        <div class="video-viewport-box">
+          <video id="modal-main-video" class="modal-video-player" src="assets/bh_accretion.mp4" controls loop playsinline></video>
+        </div>
+        <div class="media-sidebar-meta">
+          <dl class="facts">
+            <dt>Source</dt><dd id="modal-vid-facility">NASA Goddard Space Flight Center</dd>
+            <dt>Format</dt><dd>H.264, 1080p</dd>
+          </dl>
+          <p class="meta" id="modal-vid-desc">GRMHD simulation of an accretion flow.</p>
+          <div class="btn-row">
+            <button class="btn--secondary video-pill active" id="btn-vid-playpause">Play or pause</button>
+            <button class="btn--secondary video-pill" id="btn-vid-restart">Restart</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="chart-tooltip" class="floating-tooltip"></div>
+
+<script src="catalog.js"></script>
+<script src="astropulse.js"></script>
+</body>
+</html>

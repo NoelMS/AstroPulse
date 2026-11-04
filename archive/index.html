@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AstroPulse archive</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <script>try { if (localStorage.getItem('astropulse-theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}</script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="console.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+</head>
+<body>
+
+<div id="figure-tip" class="figure-tip"></div>
+
+<div id="source-modal" class="modal-overlay">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-header">
+      <div>
+        <p class="modal-badge" id="modal-type-badge">Compact object</p>
+        <h2 class="modal-title" id="modal-title">Source</h2>
+      </div>
+      <button id="modal-close" class="modal-close-btn" aria-label="Close">Close</button>
+    </div>
+    <div class="modal-body">
+      <dl class="modal-meta-grid">
+        <div class="modal-meta-item"><dt>Right ascension</dt><dd id="modal-ra">00h 00m 00s</dd></div>
+        <div class="modal-meta-item"><dt>Declination</dt><dd id="modal-dec">+00deg 00m 00s</dd></div>
+        <div class="modal-meta-item"><dt>Distance</dt><dd id="modal-dist">0.0 kpc</dd></div>
+        <div class="modal-meta-item"><dt>Characteristic period</dt><dd id="modal-period">0.0 s</dd></div>
+        <div class="modal-meta-item"><dt>Spectral state</dt><dd id="modal-state">Hard</dd></div>
+        <div class="modal-meta-item"><dt>Photon index</dt><dd id="modal-gamma">1.8</dd></div>
+      </dl>
+      <p class="m-desc-text" id="modal-desc">Accretion geometry and emission mechanism.</p>
+      <div class="modal-actions">
+        <button id="modal-btn-timing" class="primary-btn">Open in timing</button>
+        <button id="modal-btn-spectral" class="secondary-btn">Open in spectral fitting</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="console">
+  <header class="console-head">
+    <nav class="console-tabs" role="tablist" aria-label="Archive sections">
+      <button class="console-tab active" data-target="page-mission" role="tab">Overview</button>
+      <button class="console-tab" data-target="page-timing" role="tab">Timing</button>
+      <button class="console-tab" data-target="page-spectral" role="tab">Spectra</button>
+      <button class="console-tab" data-target="page-ml" role="tab">Classification</button>
+      <button class="console-tab" data-target="page-catalog" role="tab">Catalog</button>
+      <button class="console-tab" data-target="page-constellation" role="tab">Observatories</button>
+    </nav>
+    <button id="btn-print-archive" class="secondary-btn">Print report</button>
+  </header>
+
+  <div class="console-filter">
+    <span class="bar-label">Observatory</span>
+    <button class="scroll-arrow-btn" id="obs-scroll-left" aria-label="Scroll observatories left">&lt;</button>
+    <div class="obs-pills-row" id="obs-selector-container"></div>
+    <button class="scroll-arrow-btn" id="obs-scroll-right" aria-label="Scroll observatories right">&gt;</button>
+    <div class="obs-telemetry-meta" id="obs-telemetry-meta"></div>
+  </div>
+
+  <main class="content-scroll">
+    <section class="page-view active" id="page-mission">
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <span class="stat-card-title">Monitored sources</span>
+          <span class="stat-card-val" id="kpi-sources">0</span>
+          <span class="stat-card-sub" id="kpi-sources-sub">High-energy compact objects</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-card-title">Telemetry rate</span>
+          <span class="stat-card-val"><span id="kpi-rate">0</span> <span class="unit">GB/s</span></span>
+          <span class="stat-card-sub" id="kpi-rate-sub">Packet stream rate</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-card-title">Observatories</span>
+          <span class="stat-card-val" id="kpi-obs">0</span>
+          <span class="stat-card-sub">Instruments in the constellation</span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-card-title">Transient triggers</span>
+          <span class="stat-card-val" id="kpi-alerts">0</span>
+          <span class="stat-card-sub">Above the 5 sigma flare threshold</span>
+        </div>
+      </div>
+
+      <div class="celestial-deck">
+        <div class="roster-panel">
+          <h2 class="panel-title">Sources</h2>
+          <p class="panel-sub">Select a source to see its light curve and parameters.</p>
+          <div class="target-roster-list" id="source-roster-container"></div>
+        </div>
+
+        <div class="target-stage-panel" id="target-stage-panel">
+          <p class="stage-badge" id="stage-badge">Compact object</p>
+          <h2 class="stage-target-name" id="stage-target-name">Source</h2>
+          <p class="stage-coords" id="stage-coords">RA 00h 00m, Dec +00deg 00m</p>
+          <div class="stage-obs-badges" id="stage-obs-badges"></div>
+
+          <figure class="stage-preview-box">
+            <div class="stage-mini-chart" id="stage-mini-chart"></div>
+            <figcaption>Photon event light curve, count rate against time.</figcaption>
+          </figure>
+
+          <dl class="stage-metrics-grid">
+            <div class="stage-metric-box"><dt>Characteristic period</dt><dd id="stage-period">0.0 s</dd></div>
+            <div class="stage-metric-box"><dt>Accretion state</dt><dd id="stage-state">Hard</dd></div>
+            <div class="stage-metric-box"><dt>Photon index</dt><dd id="stage-gamma">1.8</dd></div>
+            <div class="stage-metric-box"><dt>X-ray flux</dt><dd id="stage-flux">0.0 erg/s/cm2</dd></div>
+          </dl>
+
+          <p class="stage-dossier-text" id="stage-desc">Accretion geometry and emission mechanism.</p>
+
+          <div class="stage-actions-row">
+            <button id="stage-btn-timing" class="primary-btn">Open in timing</button>
+            <button id="stage-btn-spectral" class="secondary-btn">Open in spectral fitting</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-view" id="page-timing">
+      <div class="panel-block">
+        <h2 class="panel-title">Source</h2>
+        <div class="target-pills-row" id="target-selector-container"></div>
+      </div>
+
+      <figure class="figure-block">
+        <div class="figure-head">
+          <h2 class="panel-title" id="lc-chart-title">Photon event light curve</h2>
+          <div class="figure-tools">
+            <span id="streaming-badge" class="streaming-badge" hidden>Streaming</span>
+            <button id="btn-toggle-markers" class="secondary-btn">Event Markers: ON</button>
+            <button id="btn-stream-toggle" class="secondary-btn">Play / Pause Stream</button>
+            <button id="btn-compare-toggle" class="secondary-btn">Compare Sources: OFF</button>
+            <button id="btn-export-lc" class="secondary-btn">Export CSV</button>
+          </div>
+        </div>
+        <div class="chart-box" id="chart-lc"></div>
+        <figcaption><strong>Figure A1.</strong> Time-resolved X-ray count rate with Poisson uncertainty, showing red-noise variability and periodic pulsations.</figcaption>
+      </figure>
+
+      <div class="two-col-grid">
+        <figure class="figure-block">
+          <div class="chart-box" id="chart-psd"></div>
+          <figcaption><strong>Figure A2.</strong> Leahy-normalized power spectral density with continuum red noise and QPO centroids.</figcaption>
+        </figure>
+        <figure class="figure-block">
+          <div class="chart-box" id="chart-ls"></div>
+          <figcaption><strong>Figure A3.</strong> Lomb-Scargle periodogram with 99% and 95% false-alarm levels.</figcaption>
+        </figure>
+      </div>
+
+      <figure class="figure-block">
+        <div class="chart-box" id="chart-folded"></div>
+        <figcaption><strong>Figure A4.</strong> Pulse profile folded over two rotations, with error bars.</figcaption>
+      </figure>
+
+      <figure class="figure-block">
+        <div class="chart-box" id="chart-hid"></div>
+        <figcaption><strong>Figure A5.</strong> Hardness-intensity diagram tracking accretion state transitions.</figcaption>
+      </figure>
+    </section>
+
+    <section class="page-view" id="page-spectral">
+      <div class="panel-block spectral-head">
+        <div class="spectral-title-row">
+          <h2 class="panel-title" id="spectral-target-header">Source</h2>
+          <span class="type-tag" id="spectral-target-type">Type</span>
+        </div>
+        <div class="phase-selector-box">
+          <span class="bar-label">Rotational phase bin</span>
+          <div class="phase-btn-group" id="phase-bins-container">
+            <button class="target-pill phase-pill active" data-phase="0">0.00 to 0.25, peak</button>
+            <button class="target-pill phase-pill" data-phase="1">0.25 to 0.50, trailing wing</button>
+            <button class="target-pill phase-pill" data-phase="2">0.50 to 0.75, trough</button>
+            <button class="target-pill phase-pill" data-phase="3">0.75 to 1.00, leading wing</button>
+          </div>
+        </div>
+      </div>
+      <div class="two-col-grid">
+        <figure class="figure-block">
+          <div class="figure-head">
+            <span class="badge-obs-status" id="spectral-obs-badge">All missions, 0.1 to 150 keV</span>
+            <div class="figure-tools">
+              <button id="toggle-comp-pl" class="secondary-btn comp-toggle">Power Law: OFF</button>
+              <button id="toggle-comp-bb" class="secondary-btn comp-toggle">Disk Blackbody: OFF</button>
+              <button id="toggle-comp-fe" class="secondary-btn comp-toggle">Fe K-alpha Line: OFF</button>
+            </div>
+          </div>
+          <div class="spectral-chart-box" id="chart-energy"></div>
+          <figcaption><strong>Figure A6.</strong> Disk blackbody, power-law continuum and 6.4 keV Fe K-alpha line, with residuals.</figcaption>
+        </figure>
+
+        <div class="panel-block">
+          <h2 class="panel-title">Fit parameters</h2>
+          <p class="panel-sub">Levenberg-Marquardt chi-square fit with 90% confidence errors.</p>
+          <div class="table-scroll">
+            <table class="app-table" id="fit-params-table">
+              <thead>
+                <tr><th>Parameter</th><th>Best fit</th><th>Error</th><th>Meaning</th></tr>
+              </thead>
+              <tbody id="fit-params-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-view" id="page-ml">
+      <div class="two-col-grid">
+        <figure class="figure-block">
+          <div class="figure-head">
+            <h2 class="panel-title">Variability classifier confusion matrix</h2>
+            <span class="badge-obs-status" id="ml-obs-badge">Calibrated for all missions</span>
+          </div>
+          <div class="chart-box" id="chart-confusion"></div>
+          <figcaption><strong>Figure A7.</strong> Random forest validation across periodic, stochastic, flaring and QPO sources.</figcaption>
+        </figure>
+        <figure class="figure-block">
+          <h2 class="panel-title">Feature importance</h2>
+          <div class="chart-box" id="chart-importance"></div>
+          <figcaption><strong>Figure A8.</strong> Gini importance of each timing statistic in the classifier.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="page-view" id="page-catalog">
+      <div class="panel-block">
+        <div class="figure-head">
+          <div>
+            <h2 class="panel-title">Source catalog</h2>
+            <p class="panel-sub">Cross-matched positions, spectra and timing for every monitored source.</p>
+          </div>
+          <div class="figure-tools">
+            <label class="visually-hidden" for="catalog-search">Search the catalog</label>
+            <input type="search" id="catalog-search" class="table-search-input" placeholder="Name, type or state">
+            <button id="btn-export-catalog" class="secondary-btn">Export CSV</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="app-table" id="catalog-table">
+            <thead>
+              <tr>
+                <th>Source</th><th>Status</th><th>Classification</th><th>RA</th><th>Dec</th><th>Distance</th><th>Period</th><th>Photon index</th><th>State</th><th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="catalog-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-view" id="page-constellation">
+      <figure class="figure-block">
+        <h2 class="panel-title">Energy band coverage</h2>
+        <div class="chart-box" id="chart-obs-bands"></div>
+        <figcaption><strong>Figure A9.</strong> Sensitivity range of each mission on a logarithmic keV axis.</figcaption>
+      </figure>
+      <div class="two-col-grid">
+        <div class="panel-block">
+          <h2 class="panel-title">Timing resolution and telemetry rate</h2>
+          <div class="table-scroll" id="chart-obs-timing"></div>
+        </div>
+        <div class="panel-block">
+          <h2 class="panel-title">Source coverage by mission</h2>
+          <div class="coverage-scroll" id="obs-coverage-grid"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="console-data.js"></script>
+<script src="console.js"></script>
+</body>
+</html>
