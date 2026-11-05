@@ -11,12 +11,11 @@ AstroPulse provides researchers, astrophysicists, and students with an integrate
 
 ---
 
-## Video & Visual Overview
-
 https://github.com/user-attachments/assets/demo (Video preview: see `docs/brag.mp4`)
 
-![AstroPulse Relativistic Sandbox](docs/screenshots/01-sandbox.png)
-*Figure 1: 3D Relativistic simulation of a stellar-mass black hole accretion disk with Doppler boosting and gravitational redshift.*
+![AstroPulse Interactive Simulation and Workstation Overview](docs/screenshots/demo.gif)
+
+*Live workstation: real-time Kerr black hole accretion disk simulation with Doppler boosting, relativistic spectral fitting, and Fourier timing analysis.*
 
 ---
 
@@ -67,7 +66,7 @@ flowchart TD
    $$\delta = \frac{1}{\Gamma (1 - \beta \cos \theta)}$$
    The local emission intensity on the accretion disk is boosted by $\delta^3$ for continuum emission, producing the characteristic asymmetric flux brightening on the approaching disk limb.
 2. **Standard Thin Accretion Disk (Shakura-Sunyaev / Novikov-Thorne)**:
-   $$T(r) = \left\{ \frac{3 G M \dot{M}}{8 \pi \sigma r^3} \left[ 1 - \left( \frac{R_{\text{in}}}{r} \right)^{1/2} \right] \right\}^{1/4}$$
+   $$T(r) = \left[ \frac{3 G M \dot{M}}{8 \pi \sigma r^3} \left( 1 - \left( \frac{R_{\text{in}}}{r} \right)^{1/2} \right) \right]^{1/4}$$
    The local temperature profile scales as $r^{-3/4}$ at large radii, peaking just outside the innermost stable circular orbit ($R_{\text{in}} = R_{\text{ISCO}}$).
 3. **Power Density Spectrum**:
    $$P(\nu_j) = \frac{2}{\langle x \rangle^2 T} |X(\nu_j)|^2$$
